@@ -9,69 +9,51 @@ Evaluate the performance of Top-K recommendation:
 '''
 import math
 import heapq # for retrieval topK
-import multiprocessing
 import numpy as np
-from time import time
-#from numba import jit, autojit
-
-# Global variables that are shared across processes
-_model = None
-_testRatings = None
-_testNegatives = None
-_K = None
 
 def evaluate_model(model, testRatings, testNegatives, K, num_thread):
     """
     Evaluate the performance (Hit_Ratio, NDCG) of top-K recommendation
     Return: score of each test rating.
     """
-    global _model
-    global _testRatings
-    global _testNegatives
-    global _K
-    _model = model
-    _testRatings = testRatings
-    _testNegatives = testNegatives
-    _K = K
-        
-    hits, ndcgs = [],[]
-    if(num_thread > 1): # Multi-thread
-        pool = multiprocessing.Pool(processes=num_thread)
-        res = pool.map(eval_one_rating, range(len(_testRatings)))
-        pool.close()
-        pool.join()
-        hits = [r[0] for r in res]
-        ndcgs = [r[1] for r in res]
-        return (hits, ndcgs)
-    # Single thread
-    for idx in range(len(_testRatings)):
-        (hr,ndcg) = eval_one_rating(idx)
-        hits.append(hr)
-        ndcgs.append(ndcg)      
-    return (hits, ndcgs)
+    num_users = len(testRatings)
+    gt_items = []
+    users_list = []
+    items_list = []
+    counts = []
 
-def eval_one_rating(idx):
-    rating = _testRatings[idx]
-    items = _testNegatives[idx]
-    u = rating[0]
-    gtItem = rating[1]
-    items.append(gtItem)
-    # Get prediction scores
-    map_item_score = {}
-    users = np.full(len(items), u, dtype = 'int32')
-    predictions = _model.predict([users, np.array(items)], 
-                                 batch_size=100, verbose=0)
-    predictions = predictions.flatten()
-    for i in range(len(items)):
-        item = items[i]
-        map_item_score[item] = predictions[i]
-    items.pop()
-    
-    # Evaluate top rank list
-    ranklist = heapq.nlargest(_K, map_item_score, key=map_item_score.get)
-    hr = getHitRatio(ranklist, gtItem)
-    ndcg = getNDCG(ranklist, gtItem)
-    return (hr, ndcg)
+    for idx in range(num_users):
+        u = testRatings[idx][0]
+        gt_item = testRatings[idx][1]
+        items = testNegatives[idx] + [gt_item]
+        count = len(items)
+        users_list.append(np.full(count, u, dtype='int32'))
+        items_list.append(np.array(items, dtype='int32'))
+        gt_items.append(gt_item)
+        counts.append(count)
+
+    all_users = np.concatenate(users_list)
+    all_items = np.concatenate(items_list)
+
+    # Single batched prediction instead of one call per user
+    all_predictions = model.predict(
+        [all_users, all_items], batch_size=1024, verbose=0
+    ).flatten()
+
+    hits, ndcgs = [], []
+    offset = 0
+    for idx in range(num_users):
+        count = counts[idx]
+        preds = all_predictions[offset:offset + count]
+        offset += count
+
+        items = testNegatives[idx] + [gt_items[idx]]
+        map_item_score = dict(zip(items, preds))
+        ranklist = heapq.nlargest(K, map_item_score, key=map_item_score.get)
+        hits.append(getHitRatio(ranklist, gt_items[idx]))
+        ndcgs.append(getNDCG(ranklist, gt_items[idx]))
+
+    return (hits, ndcgs)
 
 def getHitRatio(ranklist, gtItem):
     for item in ranklist:
