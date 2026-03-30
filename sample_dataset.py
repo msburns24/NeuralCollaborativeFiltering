@@ -1,4 +1,4 @@
-"""
+'''
 Create a small sample of a dataset for quick testing.
 
 Reads the first --num_users users from a dataset and writes a new dataset to
@@ -12,57 +12,67 @@ Data/sample-<dataset>/ with:
 Usage:
     python sample_dataset.py [--dataset ml-1m] [--num_users 500] [--path Data/]
     python sample_dataset.py --dataset pinterest-20 --num_users 200
-"""
+'''
 
 import argparse
-import numpy as np
 import os
 
+import numpy as np
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Create a small dataset sample for testing.")
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='Create a small dataset sample for testing.'
+    )
     parser.add_argument('--path', default='Data/', help='Data directory.')
     parser.add_argument('--dataset', default='ml-1m', help='Dataset name.')
-    parser.add_argument('--num_users', type=int, default=500,
-                        help='Number of users to include in the sample.')
-    parser.add_argument('--num_neg', type=int, default=99,
-                        help='Number of negative items to sample per test user (default: 99).')
-    parser.add_argument('--seed', type=int, default=42,
-                        help='Random seed for negative sampling.')
+    parser.add_argument(
+        '--num_users', type=int, default=500,
+        help='Number of users to include in the sample.'
+    )
+    parser.add_argument(
+        '--num_neg', type=int, default=99,
+        help='Number of negative items to sample per test user (default: 99).'
+    )
+    parser.add_argument(
+        '--seed', type=int, default=42,
+        help='Random seed for negative sampling.'
+    )
     return parser.parse_args()
 
 
-def read_lines(path):
+def read_lines(path: str) -> list[str]:
     with open(path, 'r') as f:
         return [line.rstrip('\n') for line in f if line.strip()]
 
 
-def main():
+def main() -> None:
     args = parse_args()
     path = args.path
     dataset = args.dataset
     num_users = args.num_users
-    num_neg   = args.num_neg
+    num_neg = args.num_neg
     rng = np.random.default_rng(args.seed)
 
     prefix = os.path.join(path, dataset)
 
-    train_path    = prefix + '.train.rating'
-    test_r_path   = prefix + '.test.rating'
+    train_path = prefix + '.train.rating'
+    test_r_path = prefix + '.test.rating'
     test_neg_path = prefix + '.test.negative'
 
     for p in (train_path, test_r_path, test_neg_path):
         if not os.path.exists(p):
-            raise FileNotFoundError(f"Expected data file not found: {p}")
+            raise FileNotFoundError(f'Expected data file not found: {p}')
 
     # --- Load test files (one row per user, row-index-aligned) ---
-    test_rating_rows   = read_lines(test_r_path)
+    test_rating_rows = read_lines(test_r_path)
     test_negative_rows = read_lines(test_neg_path)
 
     if len(test_rating_rows) != len(test_negative_rows):
         raise ValueError(
-            f"test.rating has {len(test_rating_rows)} rows but "
-            f"test.negative has {len(test_negative_rows)} rows — files are misaligned."
+            f'test.rating has {len(test_rating_rows)} rows but '
+            f'test.negative has {len(test_negative_rows)} rows '
+            f'\u2014 files are misaligned.'
         )
 
     num_users = min(num_users, len(test_rating_rows))
@@ -78,7 +88,7 @@ def main():
     user_map = {old: new for new, old in enumerate(selected_user_ids_ordered)}
 
     # --- Load and filter train.rating ---
-    train_rows_by_user = {}
+    train_rows_by_user: dict[int, list[list[str]]] = {}
     with open(train_path, 'r') as f:
         for line in f:
             line = line.strip()
@@ -93,7 +103,7 @@ def main():
     # Items that appear solely in the original negatives pool are excluded:
     # they would never receive a gradient update, making the evaluation less
     # meaningful for a small sample.
-    all_items = set()
+    all_items: set[int] = set()
 
     for rows in train_rows_by_user.values():
         for parts in rows:
@@ -108,16 +118,18 @@ def main():
 
     num_new_users = len(user_map)
     num_new_items = len(item_map)
-    train_count   = sum(len(v) for v in train_rows_by_user.values())
+    train_count = sum(len(v) for v in train_rows_by_user.values())
     # The pool of remapped item IDs available for negative sampling
     all_new_item_ids = np.array(sorted(item_map.values()), dtype=np.int32)
 
-    print(f"Dataset:       {dataset}")
-    print(f"Users:         {num_new_users}  (original IDs: "
-          f"{selected_user_ids_ordered[0]}–{selected_user_ids_ordered[-1]})")
-    print(f"Items:         {num_new_items} (remapped to 0–{num_new_items - 1})")
-    print(f"Train rows:    {train_count}")
-    print(f"Test rows:     {num_new_users}")
+    print(f'Dataset:       {dataset}')
+    print(
+        f'Users:         {num_new_users}  (original IDs: '
+        f'{selected_user_ids_ordered[0]}\u2013{selected_user_ids_ordered[-1]})'
+    )
+    print(f'Items:         {num_new_items} (remapped to 0\u2013{num_new_items - 1})')
+    print(f'Train rows:    {train_count}')
+    print(f'Test rows:     {num_new_users}')
 
     # --- Set up output directory ---
     out_dataset = f'sample-{dataset}'
@@ -149,24 +161,32 @@ def main():
     with open(out_prefix + '.test.negative', 'w') as f:
         for row in test_rating_rows[:num_users]:
             parts = row.split('\t')
-            old_uid     = int(parts[0])
+            old_uid = int(parts[0])
             old_pos_iid = int(parts[1])
-            new_uid     = user_map[old_uid]
+            new_uid = user_map[old_uid]
             new_pos_iid = item_map[old_pos_iid]
 
             # Items this user interacted with in train + their test item
-            user_pos_new = {item_map[int(p[1])] for p in train_rows_by_user.get(old_uid, [])}
+            user_pos_new = {
+                item_map[int(p[1])]
+                for p in train_rows_by_user.get(old_uid, [])
+            }
             user_pos_new.add(new_pos_iid)
 
             # Sample without replacement from items the user hasn't interacted with
-            candidate_mask = np.isin(all_new_item_ids, list(user_pos_new), invert=True)
+            candidate_mask = np.isin(
+                all_new_item_ids, list(user_pos_new), invert=True
+            )
             candidates = all_new_item_ids[candidate_mask]
             replace = len(candidates) < num_neg
             sampled = rng.choice(candidates, size=num_neg, replace=replace)
 
-            f.write(f'({new_uid},{new_pos_iid})\t' + '\t'.join(map(str, sampled)) + '\n')
+            f.write(
+                f'({new_uid},{new_pos_iid})\t'
+                + '\t'.join(map(str, sampled)) + '\n'
+            )
 
-    print(f"\nSample written to: {out_dir}/")
+    print(f'\nSample written to: {out_dir}/')
 
 
 if __name__ == '__main__':

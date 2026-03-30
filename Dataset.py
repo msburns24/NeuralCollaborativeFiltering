@@ -1,88 +1,80 @@
 '''
 Created on Aug 8, 2016
-Processing datasets. 
+Processing datasets.
 
 @author: Xiangnan He (xiangnanhe@gmail.com)
 '''
-import scipy.sparse as sp
 import numpy as np
+import scipy.sparse as sp
 
-class Dataset(object):
-    '''
-    classdocs
-    '''
 
-    def __init__(self, path):
-        '''
-        Constructor
-        '''
-        self.trainMatrix = self.load_rating_file_as_matrix(path + ".train.rating")
-        self.testRatings = self.load_rating_file_as_list(path + ".test.rating")
-        self.testNegatives = self.load_negative_file(path + ".test.negative")
-        assert len(self.testRatings) == len(self.testNegatives)
-        
-        self.num_users, self.num_items = self.trainMatrix.shape
+class Dataset:
+    def __init__(self, path: str) -> None:
+        self.train_matrix = self._load_rating_file_as_matrix(
+            path + '.train.rating'
+        )
+        self.test_ratings = self._load_rating_file_as_list(
+            path + '.test.rating'
+        )
+        self.test_negatives = self._load_negative_file(
+            path + '.test.negative'
+        )
+        assert len(self.test_ratings) == len(self.test_negatives)
+
+        self.num_users, self.num_items = self.train_matrix.shape
 
         # The train matrix is sized to the max IDs seen in training only.
         # Test ratings and negatives may reference items (or users) not present
         # in training (common in sampled datasets). Extend the counts so that
         # embedding matrices cover every ID that will be looked up at eval time.
-        if self.testRatings:
-            max_test_user = max(r[0] for r in self.testRatings)
-            max_test_item = max(r[1] for r in self.testRatings)
+        if self.test_ratings:
+            max_test_user = max(r[0] for r in self.test_ratings)
+            max_test_item = max(r[1] for r in self.test_ratings)
             self.num_users = max(self.num_users, max_test_user + 1)
             self.num_items = max(self.num_items, max_test_item + 1)
-        if self.testNegatives:
-            max_neg_item = max(max(negs) for negs in self.testNegatives if negs)
+        if self.test_negatives:
+            max_neg_item = max(
+                max(negs) for negs in self.test_negatives if negs
+            )
             self.num_items = max(self.num_items, max_neg_item + 1)
 
-    def load_rating_file_as_list(self, filename):
-        ratingList = []
-        with open(filename, "r") as f:
-            line = f.readline()
-            while line != None and line != "":
-                arr = line.split("\t")
-                user, item = int(arr[0]), int(arr[1])
-                ratingList.append([user, item])
-                line = f.readline()
-        return ratingList
-    
-    def load_negative_file(self, filename):
-        negativeList = []
-        with open(filename, "r") as f:
-            line = f.readline()
-            while line != None and line != "":
-                arr = line.split("\t")
-                negatives = []
-                for x in arr[1: ]:
-                    negatives.append(int(x))
-                negativeList.append(negatives)
-                line = f.readline()
-        return negativeList
-    
-    def load_rating_file_as_matrix(self, filename):
-        '''
-        Read .rating file and Return dok matrix.
-        The first line of .rating file is: num_users\t num_items
-        '''
-        # Get number of users and items
+    def _load_rating_file_as_list(self, filename: str) -> list[list[int]]:
+        rating_list: list[list[int]] = []
+        with open(filename, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                arr = line.split('\t')
+                rating_list.append([int(arr[0]), int(arr[1])])
+        return rating_list
+
+    def _load_negative_file(self, filename: str) -> list[list[int]]:
+        negative_list: list[list[int]] = []
+        with open(filename, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                arr = line.split('\t')
+                negative_list.append([int(x) for x in arr[1:]])
+        return negative_list
+
+    def _load_rating_file_as_matrix(self, filename: str) -> sp.dok_matrix:
+        '''Read .rating file and return dok matrix.'''
         num_users, num_items = 0, 0
-        with open(filename, "r") as f:
-            line = f.readline()
-            while line != None and line != "":
-                arr = line.split("\t")
-                u, i = int(arr[0]), int(arr[1])
-                num_users = max(num_users, u)
-                num_items = max(num_items, i)
-                line = f.readline()
-        # Construct matrix
-        mat = sp.dok_matrix((num_users+1, num_items+1), dtype=np.float32)
-        with open(filename, "r") as f:
-            line = f.readline()
-            while line != None and line != "":
-                arr = line.split("\t")
+        with open(filename, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                arr = line.split('\t')
+                num_users = max(num_users, int(arr[0]))
+                num_items = max(num_items, int(arr[1]))
+        mat = sp.dok_matrix((num_users + 1, num_items + 1), dtype=np.float32)
+        with open(filename, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                arr = line.split('\t')
                 user, item, rating = int(arr[0]), int(arr[1]), float(arr[2])
-                if (rating > 0):
+                if rating > 0:
                     mat[user, item] = 1.0
-                line = f.readline()    
         return mat

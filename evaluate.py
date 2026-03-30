@@ -1,31 +1,28 @@
-'''
-Created on Apr 15, 2016
-Evaluate the performance of Top-K recommendation:
-    Protocol: leave-1-out evaluation
-    Measures: Hit Ratio and NDCG
-    (more details are in: Xiangnan He, et al. Fast Matrix Factorization for Online Recommendation with Implicit Feedback. SIGIR'16)
-
-@author: hexiangnan
-'''
+import heapq
 import math
-import heapq # for retrieval topK
-import numpy as np
 
-def evaluate_model(model, testRatings, testNegatives, K, num_thread):
-    """
-    Evaluate the performance (Hit_Ratio, NDCG) of top-K recommendation
-    Return: score of each test rating.
-    """
-    num_users = len(testRatings)
-    gt_items = []
-    users_list = []
-    items_list = []
-    counts = []
+import numpy as np
+from keras.models import Model
+
+
+def evaluate_model(
+    model: Model,
+    test_ratings: list[list[int]],
+    test_negatives: list[list[int]],
+    k: int,
+    num_thread: int,
+) -> tuple[list[float], list[float]]:
+    '''Evaluate the performance (Hit Ratio, NDCG) of top-K recommendation.'''
+    num_users = len(test_ratings)
+    gt_items: list[int] = []
+    users_list: list[np.ndarray] = []
+    items_list: list[np.ndarray] = []
+    counts: list[int] = []
 
     for idx in range(num_users):
-        u = testRatings[idx][0]
-        gt_item = testRatings[idx][1]
-        items = testNegatives[idx] + [gt_item]
+        u = test_ratings[idx][0]
+        gt_item = test_ratings[idx][1]
+        items = test_negatives[idx] + [gt_item]
         count = len(items)
         users_list.append(np.full(count, u, dtype='int32'))
         items_list.append(np.array(items, dtype='int32'))
@@ -40,30 +37,32 @@ def evaluate_model(model, testRatings, testNegatives, K, num_thread):
         [all_users, all_items], batch_size=1024, verbose=0
     ).flatten()
 
-    hits, ndcgs = [], []
+    hits: list[float] = []
+    ndcgs: list[float] = []
     offset = 0
     for idx in range(num_users):
         count = counts[idx]
         preds = all_predictions[offset:offset + count]
         offset += count
 
-        items = testNegatives[idx] + [gt_items[idx]]
+        items = test_negatives[idx] + [gt_items[idx]]
         map_item_score = dict(zip(items, preds))
-        ranklist = heapq.nlargest(K, map_item_score, key=map_item_score.get)
-        hits.append(getHitRatio(ranklist, gt_items[idx]))
-        ndcgs.append(getNDCG(ranklist, gt_items[idx]))
+        ranklist = heapq.nlargest(k, map_item_score, key=map_item_score.get)
+        hits.append(get_hit_ratio(ranklist, gt_items[idx]))
+        ndcgs.append(get_ndcg(ranklist, gt_items[idx]))
 
     return (hits, ndcgs)
 
-def getHitRatio(ranklist, gtItem):
-    for item in ranklist:
-        if item == gtItem:
-            return 1
-    return 0
 
-def getNDCG(ranklist, gtItem):
-    for i in range(len(ranklist)):
-        item = ranklist[i]
-        if item == gtItem:
-            return math.log(2) / math.log(i+2)
-    return 0
+def get_hit_ratio(ranklist: list[int], gt_item: int) -> float:
+    for item in ranklist:
+        if item == gt_item:
+            return 1.0
+    return 0.0
+
+
+def get_ndcg(ranklist: list[int], gt_item: int) -> float:
+    for i, item in enumerate(ranklist):
+        if item == gt_item:
+            return math.log(2) / math.log(i + 2)
+    return 0.0
