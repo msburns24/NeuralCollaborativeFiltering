@@ -1,0 +1,4 @@
+.claude
+.venv
+.local
+__pycache__/
