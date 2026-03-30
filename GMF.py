@@ -103,6 +103,7 @@ def get_model(
 
 def get_train_instances(
     train,
+    num_items: int,
     num_negatives: int,
 ) -> tuple[list[int], list[int], list[int]]:
     user_input: list[int] = []
@@ -191,13 +192,14 @@ if __name__ == '__main__':
         t1 = time()
         # Generate training instances
         user_input, item_input, labels = get_train_instances(
-            train, num_negatives
+            train, num_items, num_negatives,
         )
         # Training
         hist = model.fit(
             [np.array(user_input), np.array(item_input)],
             np.array(labels),
-            batch_size=batch_size, epochs=1, verbose=0, shuffle=True,
+            batch_size=batch_size, epochs=1, shuffle=True,
+            verbose=0, # pyright: ignore[reportArgumentType]
         )
         t2 = time()
 
