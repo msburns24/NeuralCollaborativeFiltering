@@ -1,68 +1,23 @@
-# Suppress TensorFlow warnings
+# Suppress TF Warnings
 import os
-import absl.logging
 import logging
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-absl.logging.use_absl_handler()
-absl.logging.set_verbosity(absl.logging.ERROR)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 import ast
-import argparse
 from time import time
 
 import numpy as np
 from keras import initializers
 from keras.layers import Dense, Embedding, Flatten, Input, Multiply
 from keras.models import Model
-from keras.optimizers import Adam, Adagrad, RMSprop, SGD
 from keras.regularizers import l2
 
+from cli import GMFArgs
 from Dataset import Dataset
 from evaluate import evaluate_model
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description='Run GMF.')
-    parser.add_argument(
-        '--path', nargs='?', default='Data/', help='Input data path.'
-    )
-    parser.add_argument(
-        '--dataset', nargs='?', default='ml-1m', help='Choose a dataset.'
-    )
-    parser.add_argument(
-        '--epochs', type=int, default=100, help='Number of epochs.'
-    )
-    parser.add_argument(
-        '--batch_size', type=int, default=256, help='Batch size.'
-    )
-    parser.add_argument(
-        '--num_factors', type=int, default=8, help='Embedding size.'
-    )
-    parser.add_argument(
-        '--regs', nargs='?', default='[0,0]',
-        help='Regularization for user and item embeddings.'
-    )
-    parser.add_argument(
-        '--num_neg', type=int, default=4,
-        help='Number of negative instances to pair with a positive instance.'
-    )
-    parser.add_argument(
-        '--lr', type=float, default=0.001, help='Learning rate.'
-    )
-    parser.add_argument(
-        '--learner', nargs='?', default='adam',
-        help='Specify an optimizer: adagrad, adam, rmsprop, sgd'
-    )
-    parser.add_argument(
-        '--verbose', type=int, default=1,
-        help='Show performance per X iterations'
-    )
-    parser.add_argument(
-        '--out', type=int, default=1,
-        help='Whether to save the trained model.'
-    )
-    return parser.parse_args()
+from utils import get_optimizer_by_name
+from utils import get_train_instances
 
 
 def get_model(
@@ -101,32 +56,8 @@ def get_model(
     return Model(inputs=[user_input, item_input], outputs=prediction)
 
 
-def get_train_instances(
-    train,
-    num_items: int,
-    num_negatives: int,
-) -> tuple[list[int], list[int], list[int]]:
-    user_input: list[int] = []
-    item_input: list[int] = []
-    labels: list[int] = []
-    for (u, i) in train.keys():
-        # Positive instance
-        user_input.append(u)
-        item_input.append(i)
-        labels.append(1)
-        # Negative instances
-        for _ in range(num_negatives):
-            j = np.random.randint(num_items)
-            while (u, j) in train:
-                j = np.random.randint(num_items)
-            user_input.append(u)
-            item_input.append(j)
-            labels.append(0)
-    return user_input, item_input, labels
-
-
 if __name__ == '__main__':
-    args = parse_args()
+    args = GMFArgs().parse_args()
     num_factors = args.num_factors
     regs = ast.literal_eval(args.regs)
     num_negatives = args.num_neg
@@ -157,26 +88,8 @@ if __name__ == '__main__':
 
     # Build model
     model = get_model(num_users, num_items, num_factors, regs)
-    if learner.lower() == 'adagrad':
-        model.compile(
-            optimizer=Adagrad(learning_rate=learning_rate),
-            loss='binary_crossentropy',
-        )
-    elif learner.lower() == 'rmsprop':
-        model.compile(
-            optimizer=RMSprop(learning_rate=learning_rate),
-            loss='binary_crossentropy',
-        )
-    elif learner.lower() == 'adam':
-        model.compile(
-            optimizer=Adam(learning_rate=learning_rate),
-            loss='binary_crossentropy',
-        )
-    else:
-        model.compile(
-            optimizer=SGD(learning_rate=learning_rate),
-            loss='binary_crossentropy',
-        )
+    optimizer = get_optimizer_by_name(learner, learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='binary_crossentropy')
 
     # Init performance
     t1 = time()
