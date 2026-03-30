@@ -22,7 +22,20 @@ class Dataset(object):
         assert len(self.testRatings) == len(self.testNegatives)
         
         self.num_users, self.num_items = self.trainMatrix.shape
-        
+
+        # The train matrix is sized to the max IDs seen in training only.
+        # Test ratings and negatives may reference items (or users) not present
+        # in training (common in sampled datasets). Extend the counts so that
+        # embedding matrices cover every ID that will be looked up at eval time.
+        if self.testRatings:
+            max_test_user = max(r[0] for r in self.testRatings)
+            max_test_item = max(r[1] for r in self.testRatings)
+            self.num_users = max(self.num_users, max_test_user + 1)
+            self.num_items = max(self.num_items, max_test_item + 1)
+        if self.testNegatives:
+            max_neg_item = max(max(negs) for negs in self.testNegatives if negs)
+            self.num_items = max(self.num_items, max_neg_item + 1)
+
     def load_rating_file_as_list(self, filename):
         ratingList = []
         with open(filename, "r") as f:
