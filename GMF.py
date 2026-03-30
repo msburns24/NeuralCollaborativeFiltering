@@ -24,8 +24,10 @@ def get_model(
     num_users: int,
     num_items: int,
     latent_dim: int,
-    regs: list[float] = [0, 0],
+    regs: list[float] | None = None,
 ) -> Model:
+    if regs is None:
+        regs = [0, 0]
     user_input = Input(shape=(1,), dtype='int32', name='user_input')
     item_input = Input(shape=(1,), dtype='int32', name='item_input')
 
@@ -68,7 +70,6 @@ if __name__ == '__main__':
     verbose = args.verbose
 
     topK = 10
-    evaluation_threads = 1
     print('GMF arguments: %s' % args)
     model_out_file = 'Pretrain/%s_GMF_%d_%d.weights.h5' % (
         args.dataset, num_factors, time()
@@ -94,7 +95,7 @@ if __name__ == '__main__':
     # Init performance
     t1 = time()
     (hits, ndcgs) = evaluate_model(
-        model, test_ratings, test_negatives, topK, evaluation_threads
+        model, test_ratings, test_negatives, topK
     )
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f\t [%.1f s]' % (hr, ndcg, time() - t1))
@@ -119,7 +120,7 @@ if __name__ == '__main__':
         # Evaluation
         if epoch % verbose == 0:
             (hits, ndcgs) = evaluate_model(
-                model, test_ratings, test_negatives, topK, evaluation_threads
+                model, test_ratings, test_negatives, topK
             )
             hr, ndcg, loss = (
                 np.array(hits).mean(),
@@ -133,12 +134,12 @@ if __name__ == '__main__':
             )
             if hr > best_hr:
                 best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-                if args.out > 0:
+                if args.out:
                     model.save_weights(model_out_file, overwrite=True)
 
     print(
         'End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. '
         % (best_iter, best_hr, best_ndcg)
     )
-    if args.out > 0:
+    if args.out:
         print('The best GMF model is saved to %s' % model_out_file)

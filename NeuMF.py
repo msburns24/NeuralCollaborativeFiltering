@@ -26,10 +26,14 @@ def get_model(
     num_users: int,
     num_items: int,
     mf_dim: int = 10,
-    layers: list[int] = [10],
-    reg_layers: list[float] = [0],
+    layers: list[int] | None = None,
+    reg_layers: list[float] | None = None,
     reg_mf: float = 0,
 ) -> Model:
+    if layers is None:
+        layers = [10]
+    if reg_layers is None:
+        reg_layers = [0]
     assert len(layers) == len(reg_layers)
     num_layer = len(layers)
     user_input = Input(shape=(1,), dtype='int32', name='user_input')
@@ -126,7 +130,6 @@ if __name__ == '__main__':
     layers = ast.literal_eval(args.layers)
     reg_layers = ast.literal_eval(args.reg_layers)
     topK = 10
-    evaluation_threads = 1
     print('NeuMF arguments: %s' % args)
     model_out_file = 'Pretrain/%s_NeuMF_%d_%s_%d.weights.h5' % (
         args.dataset, args.num_factors, args.layers, time()
@@ -165,12 +168,12 @@ if __name__ == '__main__':
 
     # Init performance
     (hits, ndcgs) = evaluate_model(
-        model, test_ratings, test_negatives, topK, evaluation_threads
+        model, test_ratings, test_negatives, topK
     )
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f' % (hr, ndcg))
     best_hr, best_ndcg, best_iter = hr, ndcg, -1
-    if args.out > 0:
+    if args.out:
         model.save_weights(model_out_file, overwrite=True)
 
     # Training model
@@ -192,7 +195,7 @@ if __name__ == '__main__':
         # Evaluation
         if epoch % args.verbose == 0:
             (hits, ndcgs) = evaluate_model(
-                model, test_ratings, test_negatives, topK, evaluation_threads
+                model, test_ratings, test_negatives, topK
             )
             hr, ndcg, loss = (
                 np.array(hits).mean(),
@@ -206,12 +209,12 @@ if __name__ == '__main__':
             )
             if hr > best_hr:
                 best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-                if args.out > 0:
+                if args.out:
                     model.save_weights(model_out_file, overwrite=True)
 
     print(
         'End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. '
         % (best_iter, best_hr, best_ndcg)
     )
-    if args.out > 0:
+    if args.out:
         print('The best NeuMF model is saved to %s' % model_out_file)

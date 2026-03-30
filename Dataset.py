@@ -21,7 +21,7 @@ class Dataset:
         )
         assert len(self.test_ratings) == len(self.test_negatives)
 
-        self.num_users, self.num_items = self.train_matrix.shape
+        self.num_users, self.num_items = self.train_matrix.get_shape()
 
         # The train matrix is sized to the max IDs seen in training only.
         # Test ratings and negatives may reference items (or users) not present
@@ -60,21 +60,19 @@ class Dataset:
 
     def _load_rating_file_as_matrix(self, filename: str) -> sp.dok_matrix:
         '''Read .rating file and return dok matrix.'''
+        rows: list[tuple[int, int, float]] = []
         num_users, num_items = 0, 0
         with open(filename, 'r') as f:
             for line in f:
                 if not line.strip():
                     continue
                 arr = line.split('\t')
-                num_users = max(num_users, int(arr[0]))
-                num_items = max(num_items, int(arr[1]))
-        mat = sp.dok_matrix((num_users + 1, num_items + 1), dtype=np.float32)
-        with open(filename, 'r') as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                arr = line.split('\t')
                 user, item, rating = int(arr[0]), int(arr[1]), float(arr[2])
-                if rating > 0:
-                    mat[user, item] = 1.0
+                num_users = max(num_users, user)
+                num_items = max(num_items, item)
+                rows.append((user, item, rating))
+        mat = sp.dok_matrix((num_users + 1, num_items + 1), dtype=np.float32)
+        for user, item, rating in rows:
+            if rating > 0:
+                mat[user, item] = 1.0
         return mat

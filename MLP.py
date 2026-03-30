@@ -23,9 +23,13 @@ from utils import get_train_instances
 def get_model(
     num_users: int,
     num_items: int,
-    layers: list[int] = [20, 10],
-    reg_layers: list[float] = [0, 0],
+    layers: list[int] | None = None,
+    reg_layers: list[float] | None = None,
 ) -> Model:
+    if layers is None:
+        layers = [20, 10]
+    if reg_layers is None:
+        reg_layers = [0, 0]
     assert len(layers) == len(reg_layers)
     num_layer = len(layers)
     user_input = Input(shape=(1,), dtype='int32', name='user_input')
@@ -80,7 +84,6 @@ if __name__ == '__main__':
     verbose = args.verbose
 
     topK = 10
-    evaluation_threads = 1
     model_out_file = 'Pretrain/%s_MLP_%s_%d.weights.h5' % (
         args.dataset, args.layers, time()
     )
@@ -105,7 +108,7 @@ if __name__ == '__main__':
     # Init performance
     t1 = time()
     (hits, ndcgs) = evaluate_model(
-        model, test_ratings, test_negatives, topK, evaluation_threads
+        model, test_ratings, test_negatives, topK
     )
     hr, ndcg = np.array(hits).mean(), np.array(ndcgs).mean()
     print('Init: HR = %.4f, NDCG = %.4f [%.1f]' % (hr, ndcg, time() - t1))
@@ -130,7 +133,7 @@ if __name__ == '__main__':
         # Evaluation
         if epoch % verbose == 0:
             (hits, ndcgs) = evaluate_model(
-                model, test_ratings, test_negatives, topK, evaluation_threads
+                model, test_ratings, test_negatives, topK
             )
             hr, ndcg, loss = (
                 np.array(hits).mean(),
@@ -144,12 +147,12 @@ if __name__ == '__main__':
             )
             if hr > best_hr:
                 best_hr, best_ndcg, best_iter = hr, ndcg, epoch
-                if args.out > 0:
+                if args.out:
                     model.save_weights(model_out_file, overwrite=True)
 
     print(
         'End. Best Iteration %d:  HR = %.4f, NDCG = %.4f. '
         % (best_iter, best_hr, best_ndcg)
     )
-    if args.out > 0:
+    if args.out:
         print('The best MLP model is saved to %s' % model_out_file)

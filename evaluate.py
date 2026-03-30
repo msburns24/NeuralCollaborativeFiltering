@@ -10,7 +10,6 @@ def evaluate_model(
     test_ratings: list[list[int]],
     test_negatives: list[list[int]],
     k: int,
-    num_thread: int,
 ) -> tuple[list[float], list[float]]:
     '''Evaluate the performance (Hit Ratio, NDCG) of top-K recommendation.'''
     num_users = len(test_ratings)
