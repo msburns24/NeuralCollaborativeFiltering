@@ -1,12 +1,13 @@
 # Suppress TensorFlow warnings
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import absl.logging
+import logging
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 absl.logging.use_absl_handler()
 absl.logging.set_verbosity(absl.logging.ERROR)
-import logging
 logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
+import ast
 import argparse
 from time import time
 
@@ -142,8 +143,8 @@ def get_train_instances(
 
 if __name__ == '__main__':
     args = parse_args()
-    layers = eval(args.layers)
-    reg_layers = eval(args.reg_layers)
+    layers = ast.literal_eval(args.layers)
+    reg_layers = ast.literal_eval(args.reg_layers)
     num_negatives = args.num_neg
     learner = args.learner
     learning_rate = args.lr
