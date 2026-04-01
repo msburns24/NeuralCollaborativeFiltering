@@ -1,94 +1,168 @@
 # Neural Collaborative Filtering
 
-This is our implementation for the paper:
+This is an updated implementation of the paper:
 
-Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu and Tat-Seng Chua (2017). [Neural Collaborative Filtering.](http://dl.acm.org/citation.cfm?id=3052569) In Proceedings of WWW '17, Perth, Australia, April 03-07, 2017.
+> Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu and
+> Tat-Seng Chua (2017). [Neural Collaborative Filtering.][NCFPaper]
+> In Proceedings of WWW '17, Perth, Australia, April 03-07, 2017.
 
-Three collaborative filtering models: Generalized Matrix Factorization (GMF), Multi-Layer Perceptron (MLP), and Neural Matrix Factorization (NeuMF). To target the models for implicit feedback and ranking task, we optimize them using log loss with negative sampling. 
+[NCFPaper]: http://dl.acm.org/citation.cfm?id=3052569
 
-**Please cite our WWW'17 paper if you use our codes. Thanks!** 
+The paper introduces three collaborative filtering models for implicit
+feedback: **Generalized Matrix Factorization (GMF)**,
+**Multi-Layer Perceptron (MLP)**, and **Neural Matrix Factorization (NeuMF)**
+— a fusion model that combines both. All three are trained with log loss
+and negative sampling.
 
-Author: Dr. Xiangnan He (http://www.comp.nus.edu.sg/~xiangnan/)
+This repository is a fork of the [original authors' implementation][authorRepo],
+updated to run on modern Python and TensorFlow/Keras.
 
-## Environment Settings
-We use Keras with Theano as the backend. 
-- Keras version:  '1.0.7'
-- Theano version: '0.8.0'
+[authorRepo]: https://github.com/hexiangnan/neural_collaborative_filtering
 
-## Example to run the codes.
-The instruction of commands has been clearly stated in the codes (see the  parse_args function). 
+--------------------------------------------------------------------------------
 
-Run GMF:
+## Changes from the Original
+
+The original code targeted Keras 1.0.7 with a Theano backend, both of which are
+long-deprecated. This fork modernizes the implementation while preserving the
+architecture and training logic described in the paper.
+
+**Framework migration (Keras 1 → Keras 3 / TF 2.x)**
+
+- Replaced all legacy Keras 1 APIs with their modern equivalents
+  (`Model`, `Embedding`, `Dense`, etc. from `keras` 3)
+- Switched model serialization from `.h5` weight format to the current
+  `.weights.h5` convention
+- Replaced deprecated `fit_generator` and multi-output patterns with
+  the standard `model.fit` API
+- Added TF warning suppression for cleaner training output
+
+**Performance: batched evaluation**
+
+- The original `evaluate.py` called `model.predict` once per user,
+  which was extremely slow on large datasets. Replaced with a single
+  batched prediction over all users, giving a significant speedup at
+  evaluation time.
+
+**Bug fix: embedding size mismatch**
+
+- `Dataset.py` now extends `num_users` and `num_items` to cover IDs
+  appearing in the test set and negatives that may be absent from
+  training data. The original code could produce out-of-bounds
+  embedding lookups on sampled datasets.
+
+**CLI modernization**
+
+- Replaced `argparse` with
+  [`typed-argument-parser`](https://github.com/swansonk14/typed-argument-parser)
+  (`tap`), giving type-annotated, self-documenting argument
+  definitions.
+
+**New: dataset sampling utility**
+
+- Added `sample_dataset.py` to create small, self-contained dataset
+  subsets for fast iteration and testing. Handles dense ID remapping
+  and resamples negatives from the training item pool to ensure every
+  item scored at eval time has a trained embedding.
+
+--------------------------------------------------------------------------------
+
+## Environment
+
+- Python 3.11+
+- TensorFlow 2.x / Keras 3
+- See `requirements.txt` for full dependencies
+
+```bash
+pip install -r requirements.txt
 ```
-python GMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --regs [0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
+
+--------------------------------------------------------------------------------
+
+## Quickstart
+
+### Run GMF
+
+```bash
+python GMF.py --dataset ml-1m --epochs 20 --batch_size 256 \
+  --num_factors 8 --regs '[0,0]' --num_neg 4 --lr 0.001 \
+  --learner adam --verbose 1 --out
 ```
 
-Run MLP:
-```
-python MLP.py --dataset ml-1m --epochs 20 --batch_size 256 --layers [64,32,16,8] --reg_layers [0,0,0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
+### Run MLP
+
+```bash
+python MLP.py --dataset ml-1m --epochs 20 --batch_size 256 \
+  --layers '[64,32,16,8]' --reg_layers '[0,0,0,0]' --num_neg 4 \
+  --lr 0.001 --learner adam --verbose 1 --out
 ```
 
-Run NeuMF (without pre-training): 
-```
-python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --layers [64,32,16,8] --reg_mf 0 --reg_layers [0,0,0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
-```
+### Run NeuMF (without pre-training)
 
-Run NeuMF (with pre-training):
-```
-python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --layers [64,32,16,8] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1 --mf_pretrain Pretrain/ml-1m_GMF_8_1501651698.h5 --mlp_pretrain Pretrain/ml-1m_MLP_[64,32,16,8]_1501652038.h5
-```
-
-Note on tuning NeuMF: our experience is that for small predictive factors, running NeuMF without pre-training can achieve better performance than GMF and MLP. For large predictive factors, pre-training NeuMF can yield better performance (may need tune regularization for GMF and MLP). 
-
-## Docker Quickstart
-Docker quickstart guide can be used for evaluating models quickly.
-
-Install Docker Engine
-- [Ubuntu Installation](https://docs.docker.com/engine/installation/linux/ubuntu/)
-- [Mac OSX Installation](https://docs.docker.com/docker-for-mac/install/)
-- [Windows Installation](https://docs.docker.com/docker-for-windows/install/)
-
-Build a keras-theano docker image 
-```
-docker build --no-cache=true -t ncf-keras-theano .
+```bash
+python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 \
+  --num_factors 8 --layers '[64,32,16,8]' --reg_mf 0 \
+  --reg_layers '[0,0,0,0]' --num_neg 4 --lr 0.001 --learner adam \
+  --verbose 1 --out
 ```
 
-### Example to run the codes with Docker.
-Run the docker image with a volume (Run GMF):
-```
-docker run --volume=$(pwd):/home ncf-keras-theano python GMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --regs [0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
-```
+### Run NeuMF (with pre-training)
 
-Run the docker image with a volume (Run MLP):
-```
-docker run --volume=$(pwd):/home ncf-keras-theano python MLP.py --dataset ml-1m --epochs 20 --batch_size 256 --layers [64,32,16,8] --reg_layers [0,0,0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
-```
-
-Run the docker image with a volume (Run NeuMF -without pre-training): 
-```
-docker run --volume=$(pwd):/home ncf-keras-theano python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --layers [64,32,16,8] --reg_mf 0 --reg_layers [0,0,0,0] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1
+```bash
+python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 \
+  --num_factors 8 --layers '[64,32,16,8]' --num_neg 4 --lr 0.001 \
+  --learner adam --verbose 1 --out \
+  --mf_pretrain Pretrain/ml-1m_GMF_8_<timestamp>.weights.h5 \
+  --mlp_pretrain Pretrain/ml-1m_MLP_[64,32,16,8]_<timestamp>.weights.h5
 ```
 
-Run the docker image with a volume (Run NeuMF -with pre-training):
+> **Note on pre-training:** For small embedding dimensions, NeuMF
+> without pre-training often matches or beats GMF and MLP individually.
+> Pre-training tends to help more with larger embedding sizes, and may
+> require tuning regularization for the GMF and MLP components.
+
+> **Shell note:** Array arguments like `--layers '[64,32,16,8]'` must
+> be quoted to prevent shell expansion. Single quotes work in bash and
+> zsh; on Windows CMD, use double quotes.
+
+--------------------------------------------------------------------------------
+
+## Generating a Small Sample Dataset
+
+For quick testing without running on the full dataset:
+
+```bash
+python sample_dataset.py --dataset ml-1m --num_users 500
 ```
-docker run --volume=$(pwd):/home ncf-keras-theano python NeuMF.py --dataset ml-1m --epochs 20 --batch_size 256 --num_factors 8 --layers [64,32,16,8] --num_neg 4 --lr 0.001 --learner adam --verbose 1 --out 1 --mf_pretrain Pretrain/ml-1m_GMF_8_1501651698.h5 --mlp_pretrain Pretrain/ml-1m_MLP_[64,32,16,8]_1501652038.h5
+
+This creates a self-contained subset at `Data/sample-ml-1m/` with remapped
+user/item IDs and resampled negatives. You can then run any of the models
+against it:
+
+```bash
+python NeuMF.py --dataset sample-ml-1m --epochs 5 --batch_size 256 \
+  --num_factors 8 --layers '[64,32,16,8]' --reg_mf 0 \
+  --reg_layers '[0,0,0,0]' --num_neg 4 --lr 0.001 --learner adam \
+  --verbose 1
 ```
-* **Note**: If you are using `zsh` and get an error like `zsh: no matches found: [64,32,16,8]`, should use `single quotation marks` for array parameters like `--layers '[64,32,16,8]'`.
 
-### Dataset
-We provide two processed datasets: MovieLens 1 Million (ml-1m) and Pinterest (pinterest-20). 
+--------------------------------------------------------------------------------
 
-train.rating: 
-- Train file.
-- Each Line is a training instance: userID\t itemID\t rating\t timestamp (if have)
+## Dataset Format
 
-test.rating:
-- Test file (positive instances). 
-- Each Line is a testing instance: userID\t itemID\t rating\t timestamp (if have)
+Two datasets are included: MovieLens 1M (`ml-1m`) and Pinterest
+(`pinterest-20`), located in `Data/`.
 
-test.negative
-- Test file (negative instances).
-- Each line corresponds to the line of test.rating, containing 99 negative samples.  
-- Each line is in the format: (userID,itemID)\t negativeItemID1\t negativeItemID2 ...
+| File | Description |
+|---|---|
+| `<dataset>.train.rating` | Training interactions: `userID\titemID\trating\ttimestamp` |
+| `<dataset>.test.rating` | One held-out positive per user: same format |
+| `<dataset>.test.negative` | 99 negative samples per user: `(userID,itemID)\tneg1\tneg2\t...` |
 
-Last Update Date: December 23, 2018
+--------------------------------------------------------------------------------
+
+## Acknowledgements
+
+Original implementation by [Dr. Xiangnan He](http://www.comp.nus.edu.sg/~xiangnan/)
+and co-authors. Please cite the WWW '17 paper if you use this code in
+your work.
