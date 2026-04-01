@@ -35,6 +35,8 @@ def get_train_instances(
 
 
 def get_optimizer_by_name(name: str, *args, **kwargs) -> Optimizer:
-    choices = {'adagrad': Adagrad, 'rmsprop': RMSprop, 'adam': Adam}
-    OptimizerClass = choices.get(name.strip().lower(), SGD)
-    return OptimizerClass(*args, **kwargs)
+    choices = {'adagrad': Adagrad, 'rmsprop': RMSprop, 'adam': Adam, 'sgd': SGD}
+    key = name.strip().lower()
+    if key not in choices:
+        raise ValueError(f'Unknown optimizer: {name!r}. Choose from: {list(choices)}')
+    return choices[key](*args, **kwargs)
